@@ -13,6 +13,7 @@
 
 # import modules HERE
 import sys											# this allows us to analyze the arguments	
+from contextlib import contextmanager
 
 # additional information about the script
 __filename__ = "ipSubnetCalculator.py"
@@ -23,9 +24,16 @@ __email__ = "rhallinan@netcraftsmen.com"
 # version history
 #
 
+
 """
 	20190125 - Initially creating the script
 """
+
+@contextmanager
+def open_file(path, mode):
+	the_file = open(path, mode)
+	yield the_file
+	the_file.close()
 
 def getIPInfo():
 
@@ -110,7 +118,7 @@ def validateSubnetMask(subMask):
 	
 	# first validate that there are four numbers separated by .
 	if len(subMask.split('.')) != 4:
-		print("This IP address is not 4 digits separated by a '.'. Exiting now...")
+		print("This Subnet Mask is not 4 digits separated by a '.'. Exiting now...")
 		sys.exit()
 		
 	# still going means that there are 4 digits - now validate that they are all between 0 and 255
@@ -241,7 +249,7 @@ def binaryToDotted(binaryString):
 	return '.'.join([ str(int(binaryString[0:8],2)), str(int(binaryString[8:16],2)), str(int(binaryString[16:24],2)), str(int(binaryString[24:32],2))])
 	
 def dottedToBinary(dottedString):
-	""" This function takes the dotted IP address and returns a 32 biit binary string
+	""" This function takes the dotted IP address and returns a 32 bit binary string
 	"""
 	
 	binaryString=""
@@ -284,36 +292,26 @@ def dottedToHexDisplay(dottedString):
 def main(system_arguments):
 	
 	#
-	#		IP ADDRESS
+	#		IP ADDRESS and SUBNET MASK
 	#
-	# determine if the IP address was provided
+	# determine if the IP address and subnet mask were provided
+	
 	try:
 		ipAddress = system_arguments[1]
-	except:
-		ipAddress = ""
-	# Need to validate the IP address before going any further
-	if not validateIPAddress(ipAddress):
-		print("This is an invalid IP address. Exiting now...")
-		sys.exit()
-		
-	#
-	#		SUBNET MASK
-	#
-	# determine if the subnet mask was provided
-	try:
 		subnetMask = system_arguments[2]
-	except:
-		subnetMask = ""
-	# Need to validate the subnet mask before going any further
-	if not validateSubnetMask(subnetMask):
-		print("This is an invalid Subnet Mask. Exiting now...")
-		sys.exit()	
-		
-		
-	# get the IP address and subnet mask if neither was provided
-	if ipAddress == "" or subnetMask == "":
+		if not validateIPAddress(ipAddress):
+			print("This is an invalid IP address. Requesting input again...")
+			print()
+			print()
+			sys.exit()
+		if not validateSubnetMask(subnetMask):
+			print("This is an invalid subnet mask. Requesting input again...")
+			print()
+			print()
+			sys.exit()
+	except:	
 		ipAddress, subnetMask = getIPInfo()
-	
+		
 	# Get the binary strings
 	binaryStringIPAdd = dottedToBinary(ipAddress)
 	binaryStringSubMask = dottedToBinary(subnetMask)
@@ -339,6 +337,9 @@ def main(system_arguments):
 	# get the last host address
 	lastHost = calculateLastHost(bcastAddress)		
 	
+	# calculate the number of hosts
+	numHosts = 2**hostBits - 2
+	
 	# Start the output	
 	print("IP: " + ipAddress)
 	# make decisions if IP address is class D or class E	
@@ -360,7 +361,7 @@ def main(system_arguments):
 	print("The broadcast address is: " + bcastAddress)
 	print("The first host address is: " + firstHost)
 	print("The last host address is: " + lastHost)
-	print("The number of host addresses available is: " + str(2**hostBits - 2))	
+	print("The number of host addresses available is: " + str(numHosts)	)
 	print()
 	print()
 	
@@ -387,9 +388,66 @@ def main(system_arguments):
 	
 	# Bonus Challenge 2
 	print("Bonus Challenge 2: Build a DNS reverse bind map zone file assigning a value to each available host address.")
-	#TODO 
-	print("The filename will be: ")
 	
+	# figure out how many octets of host address are not all the same
+	if hostBits > 24:
+		uniqueOcts = 4
+	elif hostBits > 16:
+		uniqueOcts = 3
+	elif hostBits > 8:
+		uniqueOcts = 2
+	else:
+		uniqueOcts = 1
+	
+	# figure out how many octets of the network address are all the same
+	netOctets = 4 - uniqueOcts
+	
+	# Set the filename
+	fileName = '.'.join(netAddress.split('.')[:netOctets]) + '.rev'
+	print("The filename will be: " + fileName)
+	
+	# build the file
+	with open_file(fileName, 'w') as fileOut:
+		fileOut.write('; BIND db file for netcraftsmen.com\n')
+		fileOut.write('\n')
+		fileOut.write('$TTL 86400\n')
+		fileOut.write('\n')
+		fileOut.write('@	IN	SOA	ns1.netcraftsmen.com.	admin.netcraftsmen.com.	(\n')
+		fileOut.write('			 2019012801	; serial number YYMMDDNN\n')
+		fileOut.write('			 28800           ; Refresh\n')
+		fileOut.write('			 7200            ; Retry\n')
+		fileOut.write('			 864000          ; Expire\n')
+		fileOut.write('			 86400           ; Min TTL\n')
+		fileOut.write('			 )\n')
+		fileOut.write('')
+		fileOut.write('	IN	NS	ns1.netcraftsmen.com. \n')
+		fileOut.write('	IN	NS	ns2.netcraftsmen.com. \n')
+		fileOut.write('\n')
+		fileOut.write('\n')
+		fileOut.write('$ORIGIN netcraftsmen.com.\n')
+		fileOut.write('\n')
+		
+		initHost = 1
+		while initHost <= numHosts:
+		
+			# get the hostname for this device
+			newHostName = "host" + str(initHost) +".netcraftsmen.com."
+			
+			# get the IP address in a binary string (convert network address to integer, add the host#, convert back to binary)
+			newIP = bin(int(dottedToBinary(netAddress),2) + initHost)[2:]
+			# make sure still 32 bits long
+			newIP = '0'*(32 - len(newIP)) + newIP
+			
+			# get the unique octets of the new IP address, reverse them, and make a string
+			newIP = binaryToDotted(newIP).split('.')[-uniqueOcts:]
+			newIP.reverse()
+			newIP = '.'.join(newIP)
+			
+			# add to the file
+			fileOut.write("{ip:s}\tIN\tPTR\t{hostName:s}\n".format(ip=newIP, hostName=newHostName))
+		
+			initHost+=1
+
 if __name__ == "__main__":
 
 	# this gets run if the script is called by itself from the command line
