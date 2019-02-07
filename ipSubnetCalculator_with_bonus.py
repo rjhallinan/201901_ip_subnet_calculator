@@ -27,7 +27,6 @@ __email__ = "rhallinan@netcraftsmen.com"
 
 """
 	20190125 - Initially creating the script
-	20190207 - Using in production scripts so removed the bonus challenges and added output on prefix length
 """
 
 @contextmanager
@@ -357,7 +356,6 @@ def main(system_arguments):
 	
 	print("Wildcard Mask: " + wildcardMask)
 	print("The number of host bits: " + str(hostBits))
-	print("The number of network bits: " + str(32-hostBits))
 	print("The address class is: " + addressClass)
 	print("The network address is: " + netAddress)
 	print("The broadcast address is: " + bcastAddress)
@@ -366,6 +364,89 @@ def main(system_arguments):
 	print("The number of host addresses available is: " + str(numHosts)	)
 	print()
 	print()
+	
+	# Bonus Challenge 1
+	print("Bonus Challenge 1: Display Relevant Results in Binary and Hexidecimal")
+	print("\tBinary")
+	print("\t\tIP: " + dottedToBinaryDisplay(ipAddress))
+	print("\t\tSubnet Mask: " + dottedToBinaryDisplay(subnetMask))
+	print("\t\tWildcard Mask: " + dottedToBinaryDisplay(wildcardMask))
+	print("\t\tThe network address is: " + dottedToBinaryDisplay(netAddress))
+	print("\t\tThe broadcast address is: " + dottedToBinaryDisplay(bcastAddress))
+	print("\t\tThe first host address is: " + dottedToBinaryDisplay(firstHost))
+	print("\t\tThe last host address is: " + dottedToBinaryDisplay(lastHost))
+	print("\tHexadecimal")
+	print("\t\tIP: " + dottedToHexDisplay(ipAddress))
+	print("\t\tSubnet Mask: " + dottedToHexDisplay(subnetMask))
+	print("\t\tWildcard Mask: " + dottedToHexDisplay(wildcardMask))
+	print("\t\tThe network address is: " + dottedToHexDisplay(netAddress))
+	print("\t\tThe broadcast address is: " + dottedToHexDisplay(bcastAddress))
+	print("\t\tThe first host address is: " + dottedToHexDisplay(firstHost))
+	print("\t\tThe last host address is: " + dottedToHexDisplay(lastHost))
+	print()
+	print()
+	
+	# Bonus Challenge 2
+	print("Bonus Challenge 2: Build a DNS reverse bind map zone file assigning a value to each available host address.")
+	
+	# figure out how many octets of host address are not all the same
+	if hostBits > 24:
+		uniqueOcts = 4
+	elif hostBits > 16:
+		uniqueOcts = 3
+	elif hostBits > 8:
+		uniqueOcts = 2
+	else:
+		uniqueOcts = 1
+	
+	# figure out how many octets of the network address are all the same
+	netOctets = 4 - uniqueOcts
+	
+	# Set the filename
+	fileName = '.'.join(netAddress.split('.')[:netOctets]) + '.rev'
+	print("The filename will be: " + fileName)
+	
+	# build the file
+	with open_file(fileName, 'w') as fileOut:
+		fileOut.write('; BIND db file for netcraftsmen.com\n')
+		fileOut.write('\n')
+		fileOut.write('$TTL 86400\n')
+		fileOut.write('\n')
+		fileOut.write('@	IN	SOA	ns1.netcraftsmen.com.	admin.netcraftsmen.com.	(\n')
+		fileOut.write('			 2019012801	; serial number YYMMDDNN\n')
+		fileOut.write('			 28800           ; Refresh\n')
+		fileOut.write('			 7200            ; Retry\n')
+		fileOut.write('			 864000          ; Expire\n')
+		fileOut.write('			 86400           ; Min TTL\n')
+		fileOut.write('			 )\n')
+		fileOut.write('')
+		fileOut.write('	IN	NS	ns1.netcraftsmen.com. \n')
+		fileOut.write('	IN	NS	ns2.netcraftsmen.com. \n')
+		fileOut.write('\n')
+		fileOut.write('\n')
+		fileOut.write('$ORIGIN netcraftsmen.com.\n')
+		fileOut.write('\n')
+		
+		initHost = 1
+		while initHost <= numHosts:
+		
+			# get the hostname for this device
+			newHostName = "host" + str(initHost) +".netcraftsmen.com."
+			
+			# get the IP address in a binary string (convert network address to integer, add the host#, convert back to binary)
+			newIP = bin(int(dottedToBinary(netAddress),2) + initHost)[2:]
+			# make sure still 32 bits long
+			newIP = '0'*(32 - len(newIP)) + newIP
+			
+			# get the unique octets of the new IP address, reverse them, and make a string
+			newIP = binaryToDotted(newIP).split('.')[-uniqueOcts:]
+			newIP.reverse()
+			newIP = '.'.join(newIP)
+			
+			# add to the file
+			fileOut.write("{ip:s}\tIN\tPTR\t{hostName:s}\n".format(ip=newIP, hostName=newHostName))
+		
+			initHost+=1
 
 if __name__ == "__main__":
 
