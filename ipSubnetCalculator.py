@@ -364,6 +364,7 @@ def main(system_arguments):
 	print("The first host address is: " + firstHost)
 	print("The last host address is: " + lastHost)
 	print("The number of host addresses available is: " + str(numHosts)	)
+	print("The binary string of the IP address is: " + binaryStringIPAdd)
 	print()
 	print()
 
